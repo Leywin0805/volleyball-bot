@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import requests
@@ -11,9 +11,14 @@ import config
 HEADERS = {"User-Agent": config.USER_AGENT}
 
 
-def build_search_url(base_url: str, lookahead_days: int) -> str:
+def build_search_url(
+    base_url: str, lookahead_days: int, age_groups: list[str] | None = None
+) -> str:
     """Return base_url with its `dates` query param replaced by a rolling
-    window from today through today + lookahead_days."""
+    window from today through today + lookahead_days. If age_groups is
+    given, it replaces the `age_groups` query param too (repeated-param
+    form, e.g. age_groups=youth&age_groups=adult — the site's comma-joined
+    form silently resets the filter instead of combining values)."""
     start = date.today()
     end = start + timedelta(days=lookahead_days)
     date_range = f"{start.isoformat()}/{end.isoformat()}"
@@ -21,8 +26,20 @@ def build_search_url(base_url: str, lookahead_days: int) -> str:
     parts = urlsplit(base_url)
     query = parse_qs(parts.query)
     query["dates"] = [date_range]
+    if age_groups is not None:
+        query["age_groups"] = age_groups
     new_query = urlencode(query, doseq=True)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
+
+def is_within_window(session: dict, window: timedelta) -> bool:
+    """Whether a session's start_date falls between today and today + window."""
+    try:
+        start = datetime.strptime(session["start_date"], "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    today = date.today()
+    return today <= start <= today + window
 
 
 def fetch_listing(search_url: str) -> list[dict]:

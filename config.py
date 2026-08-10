@@ -16,7 +16,19 @@ DISCORD_BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 DISCORD_USER_ID = os.environ.get("DISCORD_USER_ID", "").strip() or None
 DISCORD_CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID", "").strip() or None
 
+# Guild to sync slash commands to instantly during development. Leave unset
+# to sync globally instead (can take up to an hour to propagate).
+DISCORD_GUILD_ID = os.environ.get("DISCORD_GUILD_ID", "").strip() or None
+
+# How often the background half-full watch loop runs, in minutes.
+WATCH_INTERVAL_MINUTES = int(os.environ.get("WATCH_INTERVAL_MINUTES", "15"))
+
 HALF_FULL_RATIO = float(os.environ.get("HALF_FULL_RATIO", "0.5"))
+
+# If a class's occurrence exactly one week before this one filled to at
+# least this ratio, treat the class as "popular" and notify the moment
+# registration opens instead of waiting for HALF_FULL_RATIO.
+POPULAR_FILL_RATIO = float(os.environ.get("POPULAR_FILL_RATIO", "0.8"))
 
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 

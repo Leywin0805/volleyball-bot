@@ -1,0 +1,17 @@
+# App name must be globally unique on Fly — change this if it's taken, or
+# just let `fly launch` overwrite it with one it confirms is free.
+app = "volleyball-bot"
+primary_region = "sjc"  # San Jose — closest available Fly region to Surrey, BC
+
+[build]
+
+[env]
+  STATE_FILE = "/data/state.json"
+
+[mounts]
+  source = "volleyball_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
