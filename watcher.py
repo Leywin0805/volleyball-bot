@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import config
 import notifier
@@ -14,7 +14,7 @@ def prune_old_occurrences(state: dict) -> None:
     whose date has passed into the class's recent_fills history (so next
     week's run can check "did the corresponding occurrence one week ago
     fill up")."""
-    today_str = date.today().strftime("%Y%m%d")
+    today_str = scraper.site_today().strftime("%Y%m%d")
     for entry in state["classes"].values():
         entry["notified_occurrences"] = [
             d for d in entry["notified_occurrences"] if d >= today_str

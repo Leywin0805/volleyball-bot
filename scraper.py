@@ -1,7 +1,8 @@
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -9,6 +10,18 @@ from bs4 import BeautifulSoup
 import config
 
 HEADERS = {"User-Agent": config.USER_AGENT}
+
+# Surrey Rec's site, and everyone using this bot, thinks in Pacific time —
+# the server running this code doesn't necessarily (Fly's VMs run UTC), so
+# every "today" comparison must be anchored to this explicitly rather than
+# the host machine's system clock/timezone.
+SITE_TIMEZONE = ZoneInfo("America/Vancouver")
+
+
+def site_today():
+    """Today's date in Surrey's local timezone, regardless of what
+    timezone the machine running this code is in."""
+    return datetime.now(SITE_TIMEZONE).date()
 
 
 def build_search_url(
@@ -19,7 +32,7 @@ def build_search_url(
     given, it replaces the `age_groups` query param too (repeated-param
     form, e.g. age_groups=youth&age_groups=adult — the site's comma-joined
     form silently resets the filter instead of combining values)."""
-    start = date.today()
+    start = site_today()
     end = start + timedelta(days=lookahead_days)
     date_range = f"{start.isoformat()}/{end.isoformat()}"
 
@@ -38,7 +51,7 @@ def is_within_window(session: dict, window: timedelta) -> bool:
         start = datetime.strptime(session["start_date"], "%Y-%m-%d").date()
     except ValueError:
         return False
-    today = date.today()
+    today = site_today()
     return today <= start <= today + window
 
 
