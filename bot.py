@@ -52,6 +52,35 @@ def describe_spots(detail: dict | None) -> str:
     return ""
 
 
+EMBED_FIELD_VALUE_LIMIT = 1024
+
+
+def add_day_fields(embed: discord.Embed, header: str, lines: list[str]) -> None:
+    """Add one or more fields for a day's sessions, splitting across
+    multiple fields if the joined text would exceed Discord's 1024-char
+    field value limit."""
+    chunk: list[str] = []
+    chunk_len = 0
+    first = True
+
+    def flush() -> None:
+        nonlocal chunk, chunk_len, first
+        if not chunk:
+            return
+        name = header if first else f"{header} (cont.)"
+        embed.add_field(name=name, value="\n\n".join(chunk), inline=False)
+        chunk, chunk_len, first = [], 0, False
+
+    for line in lines:
+        added_len = len(line) + (2 if chunk else 0)  # "\n\n" separator
+        if chunk and chunk_len + added_len > EMBED_FIELD_VALUE_LIMIT:
+            flush()
+            added_len = len(line)
+        chunk.append(line)
+        chunk_len += added_len
+    flush()
+
+
 def build_48h_embed(sessions: list[dict], details_by_key: dict[str, dict]) -> discord.Embed:
     embed = discord.Embed(
         title="\U0001f3d0 Drop-in volleyball — next 48 hours",
@@ -78,7 +107,7 @@ def build_48h_embed(sessions: list[dict], details_by_key: dict[str, dict]) -> di
                 f"**{s['time_range']}** — {s['activity_name']} @ {s['location']}"
                 f"{spots_note}\n[Register]({s['detail_url']})"
             )
-        embed.add_field(name=header, value="\n\n".join(lines), inline=False)
+        add_day_fields(embed, header, lines)
 
     return embed
 
