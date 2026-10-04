@@ -6,8 +6,8 @@ listings. It runs continuously in your server and does two things:
 - **Pings you** once a session's registration fills to half capacity (configurable) —
   or immediately when registration opens for a session that's historically popular
   (see below), since those can fill up long before hitting 50%.
-- **Answers `/48`** on demand — lists every drop-in volleyball session (Youth
-  13-18 and Adult) starting in the next 48 hours, since browsing Surrey's own
+- **Answers `/48` and `/72`** on demand — lists every drop-in volleyball session (Youth
+  13-18 and Adult) starting in the next 48 or 72 hours, since browsing Surrey's own
   site for this is slow.
 
 ## How it works
@@ -93,10 +93,10 @@ for always-on hosting see **Deploying** below.
    Copy Server ID) so `/48` registers instantly in that one server. Without
    it, commands sync globally, which can take up to an hour to show up.
 
-## Using `/48`
+## Using `/48` and `/72`
 
-Run `/48` in any channel the bot can see. It lists every drop-in volleyball
-session (Youth 13-18 and Adult) starting in the next 48 hours, grouped by
+Run `/48` or `/72` in any channel the bot can see. It lists every drop-in volleyball
+session (Youth 13-18 and Adult) starting in the next 48 or 72 hours, grouped by
 day, with live spot counts where the registration window has actually opened
 (same `NOTIFY_WINDOW_DAYS` reliability rule as the watch loop — see below).
 
@@ -130,6 +130,6 @@ back to git the way the old GitHub Actions version did.
 - `state.py` — tracks per-class capacity and which occurrences were already notified
 - `notifier.py` — sends Discord DMs/channel messages via the bot REST API
 - `watcher.py` — one check-and-notify cycle (the half-full watch logic)
-- `bot.py` — persistent Discord client: registers `/48`, runs the watch loop
+- `bot.py` — persistent Discord client: registers `/48` and `/72`, runs the watch loop
   on a timer
 - `Dockerfile`, `fly.toml`, `.dockerignore` — Fly.io deployment
