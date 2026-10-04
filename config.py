@@ -30,6 +30,13 @@ HALF_FULL_RATIO = float(os.environ.get("HALF_FULL_RATIO", "0.5"))
 # registration opens instead of waiting for HALF_FULL_RATIO.
 POPULAR_FILL_RATIO = float(os.environ.get("POPULAR_FILL_RATIO", "0.8"))
 
+# Registration opens this many hours before a session starts.
+REGISTRATION_OPENS_HOURS_BEFORE = int(os.environ.get("REGISTRATION_OPENS_HOURS_BEFORE", "72"))
+
+# For popular classes, send the heads-up this many minutes before
+# registration opens.
+PREOPEN_LEAD_MINUTES = int(os.environ.get("PREOPEN_LEAD_MINUTES", "2"))
+
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 
 USER_AGENT = (
