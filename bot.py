@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import traceback
 from datetime import datetime, timedelta
@@ -137,6 +138,8 @@ class VolleyballClient(discord.Client):
     def __init__(self):
         super().__init__(intents=discord.Intents.default())
         self.tree = app_commands.CommandTree(self)
+        self.scheduled_preopen: set[tuple[str, str]] = set()
+        self.preopen_tasks: set[asyncio.Task] = set()
 
     async def setup_hook(self) -> None:
         if config.DISCORD_GUILD_ID:
@@ -156,7 +159,27 @@ class VolleyballClient(discord.Client):
     async def watch_loop(self) -> None:
         try:
             state = state_mod.load(config.STATE_FILE)
-            watcher.run_check(state)
+            # Look two intervals ahead so no heads-up falls between checks.
+            horizon = timedelta(minutes=config.WATCH_INTERVAL_MINUTES * 2)
+            alerts = watcher.run_check(state, horizon)
+        except Exception:
+            traceback.print_exc()
+            return
+        for alert in alerts:
+            key = (alert["class_id"], alert["occurrence_date"])
+            if key in self.scheduled_preopen:
+                continue
+            self.scheduled_preopen.add(key)
+            print(f"Scheduled pre-open alert for {key} at {alert['fire_at']}")
+            task = asyncio.create_task(self.fire_preopen(alert))
+            self.preopen_tasks.add(task)
+            task.add_done_callback(self.preopen_tasks.discard)
+
+    async def fire_preopen(self, alert: dict) -> None:
+        delay = (alert["fire_at"] - datetime.now(scraper.SITE_TIMEZONE)).total_seconds()
+        await asyncio.sleep(max(0.0, delay))
+        try:
+            watcher.send_preopen_alert(alert)
         except Exception:
             traceback.print_exc()
 

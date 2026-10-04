@@ -49,6 +49,91 @@ def class_is_popular(entry: dict, occurrence_date: str) -> bool:
     return False
 
 
+def session_start_at(session: dict) -> datetime | None:
+    """Timezone-aware start datetime (site time) from start_date + the
+    start of time_range ("7:30pm - 9:30pm")."""
+    try:
+        day = datetime.strptime(session["start_date"], "%Y-%m-%d").date()
+        start_str = session["time_range"].split("-")[0].strip().lower()
+        t = datetime.strptime(start_str, "%I:%M%p").time()
+    except (ValueError, KeyError, IndexError):
+        return None
+    return datetime.combine(day, t, tzinfo=scraper.SITE_TIMEZONE)
+
+
+def registration_opens_at(session: dict) -> datetime | None:
+    """Registration opens exactly REGISTRATION_OPENS_HOURS_BEFORE the session starts."""
+    start = session_start_at(session)
+    if start is None:
+        return None
+    return start - timedelta(hours=config.REGISTRATION_OPENS_HOURS_BEFORE)
+
+
+def format_preopen_message(session: dict, opens_at: datetime) -> str:
+    try:
+        dt = datetime.strptime(session["start_date"], "%Y-%m-%d")
+        friendly_date = f"{dt.strftime('%A, %b')} {dt.day}"
+    except ValueError:
+        friendly_date = session["start_date"]
+    opens_str = opens_at.strftime("%I:%M%p").lstrip("0").lower()
+    return (
+        f"\u23f0 **{session['activity_name']}** at {session['location']} opens for "
+        f"registration in {config.PREOPEN_LEAD_MINUTES} min (at {opens_str}) — this one "
+        f"filled up last week, be ready! — {friendly_date}, {session['time_range']}\n"
+        f"{session['detail_url']}"
+    )
+
+
+def find_preopen_alerts(state: dict, sessions: list[dict], horizon: timedelta) -> list[dict]:
+    """Popular occurrences whose registration hasn't opened yet and whose
+    heads-up time (opens_at - PREOPEN_LEAD_MINUTES) falls before now + horizon."""
+    now = datetime.now(scraper.SITE_TIMEZONE)
+    lead = timedelta(minutes=config.PREOPEN_LEAD_MINUTES)
+    alerts = []
+    for session in sessions:
+        entry = state["classes"].get(session["class_id"])
+        if entry is None:
+            continue
+        occurrence_date = session["occurrence_date"]
+        if occurrence_date in entry["notified_occurrences"]:
+            continue
+        if not class_is_popular(entry, occurrence_date):
+            continue
+        opens_at = registration_opens_at(session)
+        if opens_at is None or opens_at <= now:
+            continue
+        fire_at = opens_at - lead
+        if fire_at <= now + horizon:
+            alerts.append(
+                {
+                    "class_id": session["class_id"],
+                    "occurrence_date": occurrence_date,
+                    "fire_at": fire_at,
+                    "message": format_preopen_message(session, opens_at),
+                }
+            )
+    return alerts
+
+
+def send_preopen_alert(alert: dict) -> None:
+    """Send a scheduled heads-up and mark the occurrence notified, so the
+    "just opened" alert doesn't also fire for it."""
+    state = state_mod.load(config.STATE_FILE)
+    entry = state_mod.get_class_entry(state, alert["class_id"])
+    if alert["occurrence_date"] in entry["notified_occurrences"]:
+        return
+    print(f"  Pre-open notifying: {alert['message']}")
+    notifier.notify(
+        config.DISCORD_BOT_TOKEN,
+        alert["message"],
+        config.DISCORD_USER_ID,
+        config.DISCORD_CHANNEL_ID,
+    )
+    entry["notified_occurrences"].append(alert["occurrence_date"])
+    state_mod.save(config.STATE_FILE, state)
+    return find_preopen_alerts(state, sessions, preopen_horizon)
+
+
 def format_message(session: dict, spots_left: int, max_capacity: int) -> str:
     taken = max_capacity - spots_left
     try:
@@ -85,9 +170,10 @@ def format_popular_open_message(
     )
 
 
-def run_check(state: dict) -> None:
+def run_check(state: dict, preopen_horizon: timedelta) -> list[dict]:
     """Fetch the listing, notify on any newly-half-full near-term session,
-    and persist state. One cycle of what used to be main.py's whole job."""
+    and persist state. Returns pre-open heads-up alerts due within
+    preopen_horizon for the caller to schedule at their exact fire_at."""
     prune_old_occurrences(state)
 
     search_url = scraper.build_search_url(config.SEARCH_URL_BASE, config.LOOKAHEAD_DAYS)
@@ -160,3 +246,4 @@ def run_check(state: dict) -> None:
             entry["notified_occurrences"].append(occurrence_date)
 
     state_mod.save(config.STATE_FILE, state)
+    return find_preopen_alerts(state, sessions, preopen_horizon)
