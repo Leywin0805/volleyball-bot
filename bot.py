@@ -14,8 +14,7 @@ import scraper
 import state as state_mod
 import watcher
 
-AGE_GROUPS_48H = ["youth", "adult"]
-WINDOW_48H = timedelta(hours=48)
+AGE_GROUPS = ["youth", "adult"]
 
 # The site's age_groups query param doesn't actually narrow drop-in
 # volleyball results (confirmed live: youth+adult and adult-alone both
@@ -81,11 +80,18 @@ def add_day_fields(embed: discord.Embed, header: str, lines: list[str]) -> None:
     flush()
 
 
-def build_48h_embed(sessions: list[dict], details_by_key: dict[str, dict]) -> discord.Embed:
-    embed = discord.Embed(
-        title="\U0001f3d0 Drop-in volleyball — next 48 hours",
-        color=discord.Color.orange(),
-    )
+EMBED_MAX_FIELDS = 25
+EMBED_MAX_CHARS = 5800  # Discord caps an embed at 6000 chars total; leave headroom
+
+
+def build_sessions_embeds(
+    sessions: list[dict], details_by_key: dict[str, dict], hours: int
+) -> list[discord.Embed]:
+    """Build one or more embeds listing sessions grouped by day. Splits into
+    extra embeds when Discord's 25-field / 6000-char per-embed limits would
+    be exceeded (longer windows like /72 can hit them on busy days)."""
+    title = f"\U0001f3d0 Drop-in volleyball — next {hours} hours"
+    full = discord.Embed(title=title, color=discord.Color.orange())
 
     by_date: dict[str, list[dict]] = {}
     for s in sessions:
@@ -107,9 +113,24 @@ def build_48h_embed(sessions: list[dict], details_by_key: dict[str, dict]) -> di
                 f"**{s['time_range']}** — {s['activity_name']} @ {s['location']}"
                 f"{spots_note}\n[Register]({s['detail_url']})"
             )
-        add_day_fields(embed, header, lines)
+        add_day_fields(full, header, lines)
 
-    return embed
+    embeds: list[discord.Embed] = []
+    current = discord.Embed(title=title, color=discord.Color.orange())
+    current_len = len(title)
+    for field in full.fields:
+        field_len = len(field.name) + len(field.value)
+        if current.fields and (
+            len(current.fields) >= EMBED_MAX_FIELDS
+            or current_len + field_len > EMBED_MAX_CHARS
+        ):
+            embeds.append(current)
+            current = discord.Embed(color=discord.Color.orange())
+            current_len = 0
+        current.add_field(name=field.name, value=field.value, inline=False)
+        current_len += field_len
+    embeds.append(current)
+    return embeds
 
 
 class VolleyballClient(discord.Client):
@@ -147,11 +168,9 @@ class VolleyballClient(discord.Client):
 client = VolleyballClient()
 
 
-@client.tree.command(
-    name="48",
-    description="List drop-in volleyball sessions (13+ and Adult) in the next 48 hours",
-)
-async def forty_eight(interaction: discord.Interaction) -> None:
+async def send_sessions(interaction: discord.Interaction, hours: int) -> None:
+    """Shared handler for /48 and /72: list 13+ and Adult drop-in sessions
+    starting within the next `hours` hours."""
     if config.DISCORD_CHANNEL_ID and str(interaction.channel_id) != config.DISCORD_CHANNEL_ID:
         await interaction.response.send_message(
             f"Use this in <#{config.DISCORD_CHANNEL_ID}> instead.", ephemeral=True
@@ -161,19 +180,20 @@ async def forty_eight(interaction: discord.Interaction) -> None:
     await interaction.response.defer()
 
     try:
+        window = timedelta(hours=hours)
         search_url = scraper.build_search_url(
-            config.SEARCH_URL_BASE, lookahead_days=2, age_groups=AGE_GROUPS_48H
+            config.SEARCH_URL_BASE, lookahead_days=window.days, age_groups=AGE_GROUPS
         )
         sessions = scraper.fetch_listing(search_url)
         near_term = [
             s
             for s in sessions
-            if scraper.is_within_window(s, WINDOW_48H) and matches_target_age_group(s)
+            if scraper.is_within_window(s, window) and matches_target_age_group(s)
         ]
 
         if not near_term:
             await interaction.followup.send(
-                "No drop-in volleyball sessions found in the next 48 hours."
+                f"No drop-in volleyball sessions found in the next {hours} hours."
             )
             return
 
@@ -188,13 +208,29 @@ async def forty_eight(interaction: discord.Interaction) -> None:
             except Exception as exc:
                 print(f"  Could not fetch detail for {key}: {exc}")
 
-        embed = build_48h_embed(near_term, details_by_key)
-        await interaction.followup.send(embed=embed)
+        for embed in build_sessions_embeds(near_term, details_by_key, hours):
+            await interaction.followup.send(embed=embed)
     except Exception:
         traceback.print_exc()
         await interaction.followup.send(
             "Something went wrong fetching sessions — check the bot logs."
         )
+
+
+@client.tree.command(
+    name="48",
+    description="List drop-in volleyball sessions (13+ and Adult) in the next 48 hours",
+)
+async def forty_eight(interaction: discord.Interaction) -> None:
+    await send_sessions(interaction, 48)
+
+
+@client.tree.command(
+    name="72",
+    description="List drop-in volleyball sessions (13+ and Adult) in the next 72 hours",
+)
+async def seventy_two(interaction: discord.Interaction) -> None:
+    await send_sessions(interaction, 72)
 
 
 def main() -> None:
