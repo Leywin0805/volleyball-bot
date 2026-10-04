@@ -128,10 +128,10 @@ def send_preopen_alert(alert: dict) -> None:
         alert["message"],
         config.DISCORD_USER_ID,
         config.DISCORD_CHANNEL_ID,
+        ping_everyone=True,
     )
     entry["notified_occurrences"].append(alert["occurrence_date"])
     state_mod.save(config.STATE_FILE, state)
-    return find_preopen_alerts(state, sessions, preopen_horizon)
 
 
 def format_message(session: dict, spots_left: int, max_capacity: int) -> str:
@@ -242,6 +242,7 @@ def run_check(state: dict, preopen_horizon: timedelta) -> list[dict]:
                 message,
                 config.DISCORD_USER_ID,
                 config.DISCORD_CHANNEL_ID,
+                ping_everyone=popular,
             )
             entry["notified_occurrences"].append(occurrence_date)
 

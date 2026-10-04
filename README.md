@@ -38,7 +38,7 @@ listings. It runs continuously in your server and does two things:
    checked against **the occurrence exactly one week before the one it's
    currently evaluating** — if that hit `POPULAR_FILL_RATIO` (default 0.8),
    the class is "popular" and gets a heads-up **`PREOPEN_LEAD_MINUTES`
-   (default 2) before registration opens** (session start minus
+   (default 3) before registration opens**, pinging `@everyone` in the channel (session start minus
    `REGISTRATION_OPENS_HOURS_BEFORE`, default 72h), scheduled to the exact
    minute instead of waiting for `HALF_FULL_RATIO`. If the bot was down and
    missed that window, it falls back to a "just opened" alert. If there's no occurrence recorded for

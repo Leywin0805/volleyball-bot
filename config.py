@@ -35,7 +35,7 @@ REGISTRATION_OPENS_HOURS_BEFORE = int(os.environ.get("REGISTRATION_OPENS_HOURS_B
 
 # For popular classes, send the heads-up this many minutes before
 # registration opens.
-PREOPEN_LEAD_MINUTES = int(os.environ.get("PREOPEN_LEAD_MINUTES", "2"))
+PREOPEN_LEAD_MINUTES = int(os.environ.get("PREOPEN_LEAD_MINUTES", "3"))
 
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 
